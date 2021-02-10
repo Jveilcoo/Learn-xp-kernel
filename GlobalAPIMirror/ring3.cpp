@@ -8,9 +8,13 @@
 #define IN_BUFFER_MAXLENGTH 4
 #define OUT_BUFFER_MAXLENGTH 4
 //Load .sys(Driver)
-VOID LoadDriver(LPCSTR DriverName,LPCSTR DriverPath)
+
+VOID LoadDriver(WCHAR* DriverName,WCHAR* DriverPath)
 {
 	//Create SC Manager
+	WCHAR szDriverFullPath[MAX_PATH]={0};
+	GetFullPathNameW(DriverPath,MAX_PATH,szDriverFullPath,NULL);
+	DWORD dwErr=0;
 	SC_HANDLE sh=OpenSCManager(NULL,NULL,SC_MANAGER_ALL_ACCESS);
 	if(sh==NULL)
 	{
@@ -18,7 +22,7 @@ VOID LoadDriver(LPCSTR DriverName,LPCSTR DriverPath)
 		return;
 	}
 	//Create Service
-	SC_HANDLE m_hServiceDDK=CreateService(
+	SC_HANDLE m_hServiceDDK=CreateServiceW(
 		sh,\
 		DriverName,\
 		DriverName,\
@@ -26,7 +30,7 @@ VOID LoadDriver(LPCSTR DriverName,LPCSTR DriverPath)
 		SERVICE_KERNEL_DRIVER,\
 		SERVICE_DEMAND_START,\
 		SERVICE_ERROR_IGNORE,\
-		DriverPath,\
+		szDriverFullPath,\
 		NULL,\
 		NULL,\
 		NULL,\
@@ -39,15 +43,15 @@ VOID LoadDriver(LPCSTR DriverName,LPCSTR DriverPath)
 	}
 
 	//OpenService
-	m_hServiceDDK=OpenService(sh,DriverName,SERVICE_ALL_ACCESS);
-	
+	m_hServiceDDK=OpenServiceW(sh,DriverName,SERVICE_ALL_ACCESS);
+	dwErr = GetLastError();
 	if(m_hServiceDDK)
 	{
 		printf("Set Driver success\n");
 	}
 	if(!StartService(m_hServiceDDK,NULL,NULL))
 	{
-		DWORD dwErr = GetLastError();
+		dwErr = GetLastError();
 		if (dwErr != ERROR_SERVICE_ALREADY_RUNNING)
 		{
 			printf("Driver run error!, %d\n", dwErr);
@@ -66,12 +70,12 @@ VOID LoadDriver(LPCSTR DriverName,LPCSTR DriverPath)
 	return;
 }
 
-void UnLoadDriver(LPCSTR DriverName)
+void UnLoadDriver(WCHAR* DriverName)
 {
 	SC_HANDLE sh=OpenSCManager(NULL,NULL,SC_MANAGER_ALL_ACCESS);
-	SC_HANDLE m_hServiceDDK=OpenService(sh,DriverName,SERVICE_STOP | DELETE);
+	SC_HANDLE m_hServiceDDK=OpenServiceW(sh,DriverName,SERVICE_STOP | DELETE);
 	DeleteService(m_hServiceDDK);
-		if (sh)
+	if (sh)
 	{
 		CloseServiceHandle(sh);
 	}
@@ -99,7 +103,7 @@ DWORD *GetPTE(DWORD addr)
     return (DWORD *)(0xC0000000 + PDPTI * 0x200000 + PDI * 0x1000 + PTI * 8);
 }
 
-BOOL Ring0Communication()
+BOOL Ring0Communication(DWORD dwInBuffer)
 {
 	HANDLE hDevice=CreateFileA(SYMBOLICLINK_NAME,GENERIC_READ|GENERIC_WRITE,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
 	DWORD dwError = GetLastError();
@@ -109,7 +113,7 @@ BOOL Ring0Communication()
         getchar();
         return 1;
     }
-	DWORD dwInBuffer;
+	
 	DWORD dwOutBuffer=0xffffffff;
 	DWORD dwOut;
 	DeviceIoControl(hDevice,OPER2,&dwInBuffer,IN_BUFFER_MAXLENGTH,&dwOutBuffer,OUT_BUFFER_MAXLENGTH,&dwOut,NULL);
@@ -160,23 +164,18 @@ int main()
 {
 	//Load Driver
 	
-	char Driverpath[256];
-	char DriverName[256];
+	WCHAR Driverpath[]=L"driver_learn.sys";
+	WCHAR DriverName[]=L"driver_learn";
 	DWORD User32Base;
-	/*
-	printf("Please Driver Name:");
-	scanf("%s",DriverName);
-	printf("Please Driver Path:");
-	scanf("%s",Driverpath);
 	LoadDriver(DriverName,Driverpath);
-	*/
 	//Search user32.dll position
 	MessageBox(0,"Click True",0,0);
 	User32Base=FindModuleBase();
 	printf("User32DllBase:%x",User32Base);
 	
 	//User32 Addr send ring0
-
+	Ring0Communication(User32Base);
+	getchar();
 	//UnLoadDriver
-	//UnLoadDriver(DriverName);
+	UnLoadDriver(DriverName);
 }
