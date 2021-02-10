@@ -7,6 +7,7 @@
 #define OPER2 CTL_CODE(FILE_DEVICE_UNKNOWN,0x900,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IN_BUFFER_MAXLENGTH 4
 #define OUT_BUFFER_MAXLENGTH 4
+#define MessageBoxOffset 0x407ea
 //Load .sys(Driver)
 
 VOID LoadDriver(WCHAR* DriverName,WCHAR* DriverPath)
@@ -160,6 +161,33 @@ DWORD FindModuleBase()
 	return 0;
 }
 
+void __declspec(naked) WeCode()
+{
+	__asm
+	{
+		mov edi,edi;
+		push ebp;
+		mov ebp,esp;
+	}
+	printf("Have Process call MessageBoxA");
+}
+
+VOID WriteShellcode(DWORD DllBase)
+{
+	DWORD MessageBox_Addr=DllBase+MessageBoxOffset;
+	DWORD target=(DWORD)(&WeCode);
+	DWORD offset=(MessageBox_Addr+5)-target;
+	unsigned char jp[5]={0xe9};
+	memcpy(jp+1,&offset,4);
+	memcpy((PVOID)MessageBox_Addr,jp,5);
+	__asm
+	{
+		//jmp return MessageBox
+	}
+}
+
+
+
 int main()
 {
 	//Load Driver
@@ -175,6 +203,7 @@ int main()
 	
 	//User32 Addr send ring0
 	Ring0Communication(User32Base);
+	WriteShellcode(User32Base);
 	getchar();
 	//UnLoadDriver
 	UnLoadDriver(DriverName);
